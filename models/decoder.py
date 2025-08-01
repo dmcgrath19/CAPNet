@@ -1,5 +1,3 @@
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 class SegDecoder(nn.Module):
@@ -15,17 +13,19 @@ class SegDecoder(nn.Module):
     def forward(self, x):
         # x: (B, N, D)
         logits = self.head(x)  # (B, N, C)
-        
+
         B, N, C = logits.shape
-        H, W = self.upsample_size  # 224,224
 
-        # Compute spatial size of token grid:
-        spatial_size = int(N ** 0.5)
-        assert spatial_size * spatial_size == N, "N must be a perfect square"
+        # Calculate spatial size of tokens (assumes perfect square)
+        spatial_size = int((N - 5) ** 0.5)  # subtract prompts count if needed
 
-        logit_map = logits.permute(0, 2, 1).reshape(B, C, spatial_size, spatial_size)  # (B, C, h, w)
+        # If you included prompts, remove them here for reshaping spatial tokens only
+        # Example assumes prompts are at the start:
+        spatial_logits = logits[:, 5:, :]  # (B, N - 5, C)
 
-        # Upsample to target H, W
-        logit_map = F.interpolate(logit_map, size=(H, W), mode='bilinear', align_corners=False)
+        logit_map = spatial_logits.permute(0, 2, 1).reshape(B, C, spatial_size, spatial_size)  # (B, C, h, w)
+
+        # Upsample to full image resolution
+        logit_map = F.interpolate(logit_map, size=self.upsample_size, mode='bilinear', align_corners=False)
 
         return logit_map
