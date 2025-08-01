@@ -15,10 +15,17 @@ class SegDecoder(nn.Module):
     def forward(self, x):
         # x: (B, N, D)
         logits = self.head(x)  # (B, N, C)
-
-        # Assuming first tokens align with RGB (after prompts)
+        
         B, N, C = logits.shape
-        H, W = self.upsample_size
-        logit_map = logits[:, -H * W:, :]  # (B, H*W, C)
-        logit_map = logit_map.permute(0, 2, 1).reshape(B, C, H, W)  # (B, C, H, W)
+        H, W = self.upsample_size  # 224,224
+
+        # Compute spatial size of token grid:
+        spatial_size = int(N ** 0.5)
+        assert spatial_size * spatial_size == N, "N must be a perfect square"
+
+        logit_map = logits.permute(0, 2, 1).reshape(B, C, spatial_size, spatial_size)  # (B, C, h, w)
+
+        # Upsample to target H, W
+        logit_map = F.interpolate(logit_map, size=(H, W), mode='bilinear', align_corners=False)
+
         return logit_map
