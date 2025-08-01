@@ -5,7 +5,7 @@ from data.nyu_loader import NYUDataset
 from models.rgb_encoder import RGBEncoder
 from models.point_encoder import PointEncoder
 from models.fusion_module import FusionModule
-from models.decoder import SegDecoder  # You’ll build this
+from models.decoder import SegDecoder
 
 def train_model(config):
     device = torch.device('cuda' if config['use_cuda'] and torch.cuda.is_available() else 'cpu')
@@ -18,18 +18,28 @@ def train_model(config):
     fusion = FusionModule().to(device)
     decoder = SegDecoder(num_classes=config['num_classes']).to(device)
 
-    model = nn.Sequential(rgb_enc, pc_enc, fusion, decoder)  # OR combine manually
-    optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
+    optimizer = torch.optim.Adam(
+        list(rgb_enc.parameters()) +
+        list(pc_enc.parameters()) +
+        list(fusion.parameters()) +
+        list(decoder.parameters()),
+        lr=config['lr']
+    )
     criterion = nn.CrossEntropyLoss()
 
     for epoch in range(config['epochs']):
+        rgb_enc.train()
+        pc_enc.train()
+        fusion.train()
+        decoder.train()
+
         for rgb, pc, label in loader:
             rgb, pc, label = rgb.to(device), pc.to(device), label.to(device)
 
             rgb_feat = rgb_enc(rgb)
             pc_feat = pc_enc(pc)
             fused = fusion(rgb_feat, pc_feat)
-            out = decoder(fused)
+            out = decoder(fused)  # shape (B, C, H, W)
 
             loss = criterion(out, label)
             optimizer.zero_grad()
