@@ -1,4 +1,5 @@
 from trainer import train_model
-from default_config import config
+from configs.default_config import config
 
-train_model(config)
+if __name__ == "__main__":
+    train_model(config)
