@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from data.nyu_loader import NYUDataset
+from data.nyu_data import NYUDataset 
 from models.rgb_encoder import RGBEncoder
 from models.point_encoder import PointEncoder
 from models.fusion_module import FusionModule
@@ -10,7 +10,7 @@ from models.decoder import SegDecoder
 def train_model(config):
     device = torch.device('cuda' if config['use_cuda'] and torch.cuda.is_available() else 'cpu')
 
-    dataset = NYUDataset(config['dataset_path'])
+    dataset = NYUDataset(split='train')
     loader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True)
 
     rgb_enc = RGBEncoder().to(device)
@@ -33,17 +33,21 @@ def train_model(config):
         fusion.train()
         decoder.train()
 
+        total_loss = 0
         for rgb, pc, label in loader:
             rgb, pc, label = rgb.to(device), pc.to(device), label.to(device)
 
             rgb_feat = rgb_enc(rgb)
             pc_feat = pc_enc(pc)
             fused = fusion(rgb_feat, pc_feat)
-            out = decoder(fused)  # shape (B, C, H, W)
+            out = decoder(fused)
 
             loss = criterion(out, label)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-        print(f"Epoch {epoch}: Loss = {loss.item():.4f}")
+            total_loss += loss.item()
+
+        avg_loss = total_loss / len(loader)
+        print(f"Epoch {epoch+1}: Loss = {avg_loss:.4f}")
