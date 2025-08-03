@@ -1,8 +1,4 @@
-from torch.utils.data import Dataset
-from datasets import load_dataset
-import numpy as np
-import torch
-from torchvision import transforms
+from torchvision.transforms import ToPILImage
 
 class NYUDataset(Dataset):
     def __init__(self, split='train', max_points=300, downsample=50):
@@ -11,32 +7,32 @@ class NYUDataset(Dataset):
         self.max_points = max_points
         self.downsample = downsample
 
+        self.to_pil = ToPILImage()  # convert tensor to PIL
         self.rgb_transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor()
         ])
 
-    def __len__(self):
-        return len(self.dataset)
-
     def __getitem__(self, idx):
         sample = self.dataset[idx]
-        rgb = sample['image']  # PIL.Image.Image
+        rgb_tensor = sample['image']  # This is a torch.Tensor now
+
+        rgb = self.to_pil(rgb_tensor)  # Convert tensor to PIL Image
+        rgb = self.rgb_transform(rgb)  # Now works fine
+
         depth = sample['depth'].squeeze(0)  # (H, W)
         label = sample['segmentation']      # (H, W)
 
-        rgb = self.rgb_transform(rgb)  # (3, 224, 224)
-        depth = torch.nn.functional.interpolate(depth.unsqueeze(0).unsqueeze(0), size=(224, 224), mode='bilinear', align_corners=False).squeeze()
-        label = torch.nn.functional.interpolate(label.unsqueeze(0).unsqueeze(0).float(), size=(224, 224), mode='nearest').long().squeeze()
+        depth = torch.nn.functional.interpolate(
+            depth.unsqueeze(0).unsqueeze(0), size=(224, 224),
+            mode='bilinear', align_corners=False
+        ).squeeze()
 
-        pc = self.depth_to_point_cloud(depth)  # (N, 3)
+        label = torch.nn.functional.interpolate(
+            label.unsqueeze(0).unsqueeze(0).float(), size=(224, 224),
+            mode='nearest'
+        ).long().squeeze()
+
+        pc = self.depth_to_point_cloud(depth)
 
         return rgb, pc, label
-
-    def depth_to_point_cloud(self, depth):
-        H, W = depth.shape
-        x = torch.arange(0, W).view(1, -1).expand(H, W)
-        y = torch.arange(0, H).view(-1, 1).expand(H, W)
-        z = depth
-        xyz = torch.stack((x, y, z), dim=-1).reshape(-1, 3)
-        return xyz[::self.downsample][:self.max_points]  # limit number of points
