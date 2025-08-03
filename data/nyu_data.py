@@ -1,4 +1,10 @@
 from torchvision.transforms import ToPILImage
+from torch.utils.data import Dataset
+from datasets import load_dataset
+import numpy as np
+import torch
+from torchvision import transforms
+
 
 class NYUDataset(Dataset):
     def __init__(self, split='train', max_points=300, downsample=50):
